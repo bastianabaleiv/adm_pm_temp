@@ -1,4 +1,34 @@
 
+
+
+fit_sarimax(tscv_data[2,]$train[[1]],
+            tscv_data[2,]$validate[[1]],
+            tscv_data[2,]$order[[1]],
+            tscv_data[2,]$season[[1]])
+
+sarimax <- stats::arima(tscv_data[2,]$train[[1]]$adm,
+                        order = unlist(tscv_data[2,]$order[[1]]),
+                        seasonal = unlist(tscv_data[2,]$season[[1]]),
+                        xreg = tscv_data[2,]$train[[1]][,c("pm", "temp_avg")],
+                        optim.control = list(maxit = 750))
+
+
+fit_sarimax <- stats::predict(sarimax,
+                              n.ahead = 7,
+                              newxreg = tscv_data[2,]$validate[[1]][,c("pm", "temp_avg")])
+
+# -------------------------------------------------------------------------
+
+tscv_sarimax  <-
+  tscv_data[1400:1410, ] %>%
+  mutate(model = pmap(
+    list(train,
+         validate,
+         order,
+         season),
+    possibly(fit_sarimax2,
+             otherwise = NULL)
+  ))
 fit_start <- Sys.time()
 
 tscv_sarimax  <- 
