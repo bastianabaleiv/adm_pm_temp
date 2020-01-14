@@ -1,4 +1,27 @@
-
+# -------------------------------------------------------------------------
+# library(smooth)
+# ssarima(train$adm,
+#         silent = "output")
+# 
+# ssarima(train$adm, 
+#         orders = list(ar=c(0,1),i=c(1,0),ma=c(1,1)),
+#         lags=c(1,7),
+#         h=7,
+#         silent = TRUE,
+#         xreg = cbind(train$pm, train$temp_avg))
+# 
+# model <- auto.ssarima(train$adm, h = 28)
+# 
+# plot(model)
+# 
+# plot(train$adm, type = "l", col = "grey")
+# lines(model$fitted, col = "orange")
+# 
+# model_forecast <- forecast(model, h = 28, interval = "none")
+# plot(model_forecast)
+# 
+# hist(residuals(model), breaks = 50)
+# 
 
 
 fit_sarimax(tscv_data[2,]$train[[1]],
