@@ -54,7 +54,7 @@ tscv_data <- rsample::rolling_origin(
   initial = 365 * 3,
   assess = forecast_horizon,
   cumulative = FALSE,
-  skip = forecast_horizon - 1
+  skip = forecast_horizon - 1 
 ) %>%
   mutate(
     # Extract train set for each split
@@ -82,9 +82,9 @@ tscv_data$idx <- as.factor(str_c(
   sep = "_"
 ))
 
-# SARIMAX function --------------------------------------------------------
+# sarima function --------------------------------------------------------
 
-fit_sarimax <-
+fit_sarima <-
   function(train_set,
            validate_set,
            order,
@@ -92,24 +92,24 @@ fit_sarimax <-
            ...) {
     fit_start <- Sys.time()
     
-    sarimax <- stats::arima(
+    sarima <- stats::arima(
       train_set$adm,
       order = unlist(order),
       seasonal = unlist(season),
-      xreg = train_set[, c("pm", "temp_avg")],
+      #xreg = train_set[, c("pm", "temp_avg")],
       optim.control = list(maxit = 750)
     )
     
     fit_time <- Sys.time() - fit_start
     
-    pred_sarimax <- stats::predict(object = sarimax,
-                                   n.ahead = forecast_horizon,
-                                   newxreg = 
-                                     validate_set[, c("pm", "temp_avg")])$pred
+    pred_sarima <- stats::predict(object = sarima,
+                                   n.ahead = forecast_horizon #, UNIVARIATE SARIMA
+                                   #newxreg = validate_set[, c("pm", "temp_avg")] 
+                                   )$pred
     
     return(list(
-      model = sarimax,
-      validate_predicted = as.numeric(pred_sarimax),
+      model = sarima,
+      validate_predicted = as.numeric(pred_sarima),
       runtime = fit_time
     ))
     
@@ -121,14 +121,14 @@ plan(multicore, workers = availableCores() - 1)
 
 start <- Sys.time()
 
-tscv_sarimax  <-
+tscv_sarima  <-
   tscv_data %>%
   mutate(model_fit = future_pmap(
     list(train_set,
          validate_set,
          order,
          season),
-    possibly(fit_sarimax,
+    possibly(fit_sarima,
              otherwise = NULL)
     ,
     .progress = TRUE
@@ -138,13 +138,13 @@ tscv_time <- Sys.time() - start
 
 # Evaluation Metrics ------------------------------------------------------
 
-tscv_sarimax <-
-  tscv_sarimax %>%
+tscv_sarima <-
+  tscv_sarima %>%
   mutate(
-    model = map(tscv_sarimax$model_fit, ~ .x[["model"]]),
+    model = map(tscv_sarima$model_fit, ~ .x[["model"]]),
     validate_predicted = 
-      map(tscv_sarimax$model_fit, ~ .x[["validate_predicted"]]),
-    runtime = map(tscv_sarimax$model_fit, ~ .x[["runtime"]])
+      map(tscv_sarima$model_fit, ~ .x[["validate_predicted"]]),
+    runtime = map(tscv_sarima$model_fit, ~ .x[["runtime"]])
   ) %>%
   mutate(
     mape = map2_dbl(
@@ -170,19 +170,19 @@ tscv_sarimax <-
     )
   )
 
-saveRDS(tscv_sarimax, 
-        file = str_c("tscv_sarimax_", format(start, "%Y_%m_%d_%H%M"), ".rds"))
+saveRDS(tscv_sarima, 
+        file = str_c("tscv_sarima_", format(start, "%Y_%m_%d_%H%M"), ".rds"))
 
 # Time series cross validation results ------------------------------------
 
 # Non fitted days
-# tscv_sarimax %>%
+# tscv_sarima %>%
 #   group_by(idx) %>%
 #   filter(is.nan(mape)) %>%
 #   select(start_date) %>% View()
 
 # Validation set results (Nan removed)
-# tscv_sarimax %>%
+# tscv_sarima %>%
 #   group_by(idx) %>%
 #   summarise(nan_count = sum(is.nan(mape)),
 #             avg_mape = mean(mape, na.rm = TRUE),
@@ -193,7 +193,7 @@ saveRDS(tscv_sarimax,
 
 # True results (NaN)
 
-tscv_results <- tscv_sarimax %>%
+tscv_results <- tscv_sarima %>%
   group_by(idx) %>%
   summarise(
     nan_count = sum(is.nan(mape)),
@@ -204,29 +204,32 @@ tscv_results <- tscv_sarimax %>%
   ) %>%
   filter(nan_count == 0)
 
+# Best model
+#  tscv_results %>% slice(which.min(avg_mape))
+
 # Log ---------------------------------------------------------------------
 
 log_file <-
-  str_c("tscv_sarimax_", format(start, "%Y_%m_%d_%H%M"), ".txt")
+  str_c("tscv_sarima_", format(start, "%Y_%m_%d_%H%M"), ".txt")
 
 cat(
   c(
-    "SARIMAX",
+    "SARIMA",
     paste0("Fecha ejecución: ", start),
     paste0("Tiempo total de ejecución (modelo): ", format(tscv_time)),
     paste0("Horizonte de pronóstico: ", forecast_horizon),
-    paste0("Modelos a ajustar: ", nrow(tscv_sarimax)),
+    paste0("Modelos a ajustar: ", nrow(tscv_sarima)),
     paste0("Modelos no ajustados: ", sum(unlist(
-      lapply(tscv_sarimax$model, is.null)
+      lapply(tscv_sarima$model, is.null)
     ))),
-    paste0("Modelos ajustados: ", nrow(tscv_sarimax) - sum(unlist(
-      lapply(tscv_sarimax$model, is.null)
+    paste0("Modelos ajustados: ", nrow(tscv_sarima) - sum(unlist(
+      lapply(tscv_sarima$model, is.null)
     ))),
     paste0(
       "Modelos no ajustados del total (%): ",
       sum(unlist(lapply(
-        tscv_sarimax$model, is.null
-      ))) / nrow(tscv_sarimax) * 100,
+        tscv_sarima$model, is.null
+      ))) / nrow(tscv_sarima) * 100,
       "%"
     ),
     "===================================="
