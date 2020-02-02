@@ -27,16 +27,16 @@ forecast_horizon <- 7 # c(1,7,14,21,28)
 
 # Grid --------------------------------------------------------------------
 
-order_list <- list("p" = seq(0, 3),
-                   "d" = seq(0, 1),
-                   "q" = seq(0, 3)) %>%
+order_list <- list("p" = seq(0, 1),
+                   "d" = seq(1, 1),
+                   "q" = seq(0, 1)) %>%
   cross() %>%
   map(purrr:::lift(c))
 
 season_list <- list(
-  "P" = seq(0, 3),
-  "D" = seq(0, 1),
-  "Q" = seq(0, 3),
+  "P" = seq(0, 1),
+  "D" = seq(1, 1),
+  "Q" = seq(0, 1),
   "period" = 7
 )  %>%
   cross() %>%
@@ -202,7 +202,19 @@ tscv_results <- tscv_sarimax %>%
     avg_smape = mean(smape),
     avg_rmse = mean(rmse)
   ) %>%
-  filter(nan_count == 0)
+  filter(nan_count == 0) %>% 
+  arrange(avg_mape)
+
+# Best model
+
+best_model_idx <- tscv_results %>% 
+  slice(which.min(avg_mape))
+
+params <-
+  str_extract_all(as.character(best_model_idx$idx), pattern = "\\d+") %>%
+  unlist()
+
+names(params) <- c("p", "d", "q", "P", "D", "Q", "period")
 
 # Log ---------------------------------------------------------------------
 
@@ -211,7 +223,7 @@ log_file <-
 
 cat(
   c(
-    "SARIMAX",
+    "Linear Regression with SARIMA errors",
     paste0("Fecha ejecución: ", start),
     paste0("Tiempo total de ejecución (modelo): ", format(tscv_time)),
     paste0("Horizonte de pronóstico: ", forecast_horizon),
@@ -229,7 +241,9 @@ cat(
       ))) / nrow(tscv_sarimax) * 100,
       "%"
     ),
-    "===================================="
+    paste0("Mejor MAPE: ", round(min(best_model_idx$avg_mape),3), "%"),
+    "====================================",
+    "Parámetros mejor especificación"
   ),
   file = log_file,
   append = TRUE,
@@ -237,5 +251,6 @@ cat(
 )
 
 sink(log_file, append = TRUE)
-print(tscv_results)
+print(params)
+print(head(tscv_results,10))
 sink()

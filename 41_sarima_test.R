@@ -32,16 +32,18 @@ season_list <- list(
 sarima_hp <- crossing(tibble("order" = order_list),
                       tibble("season" = season_list))
 
-rm(order_list, season_list)
+params <- c(order_list,season_list) %>% unlist()
+
+# rm(order_list, season_list)
 
 # Time series cross validation (Test set) ---------------------------------
 
 tscv_data <- rsample::rolling_origin(
   data = apt_df,
   initial = 365 * 4,
-  assess = 7,
+  assess = forecast_horizon,
   cumulative = FALSE,
-  skip = 6
+  skip = forecast_horizon - 1
 ) %>%
   mutate(
     # Extract train set for each split
@@ -155,4 +157,37 @@ tscv_results_test <- tscv_sarima_test %>%
     avg_rmse = mean(rmse)
   ) %>%
   filter(nan_count == 0)
+
+
+# Output ------------------------------------------------------------------
+
+output_path <- str_c("tscv_sarima_test_", format(start, "%Y_%m_%d_%H%M"))
+
+tscv_sarima_test %>% 
+  select(test_set, forecast = test_predicted) %>% 
+  unnest(c(test_set, forecast)) %>% 
+  write_csv(path = str_c(output_path, ".csv"))
+
+log_file <-
+  str_c(output_path, ".txt")
+
+cat(
+  c(
+    "SARIMA univariate model - Test Set",
+    paste0("Fecha ejecución: ", start),
+    paste0("Tiempo total de ejecución (modelo): ", format(tscv_time)),
+    paste0("Horizonte de pronóstico: ", forecast_horizon),
+    paste0("MAPE: ", round(min(tscv_results_test$avg_mape),3), "%"),
+    "====================================",
+    "Parámetros especificación"
+  ),
+  file = log_file,
+  append = TRUE,
+  sep = "\n"
+)
+
+sink(log_file, append = TRUE)
+print(params)
+print(tscv_results_test)
+sink()
 

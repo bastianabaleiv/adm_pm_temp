@@ -1,3 +1,89 @@
+# Pkgs --------------------------------------------------------------------
+
+library(tidyverse)
+library(lubridate)
+library(furrr)
+library(rsample)
+library(Metrics)
+
+# Read data ---------------------------------------------------------------
+
+apt_df <- readRDS('data/adm_pm_temp.rds')
+
+# Train/Validation/Test sets ----------------------------------------------
+
+train <- apt_df %>% filter(date < "2017-01-01")
+
+validation <-
+  apt_df %>% filter(date >= "2017-01-01" & date < "2018-01-01")
+
+test <- apt_df %>% filter(date >= "2018-01-01")
+
+train_validation <- rbind(train, validation)
+
+# Forecast Horizon --------------------------------------------------------
+
+forecast_horizon <- 7 # c(1,7,14,21,28)
+
+# Grid --------------------------------------------------------------------
+
+order_list <- list("p" = seq(0, 3),
+                   "d" = seq(0, 1),
+                   "q" = seq(0, 3)) %>%
+  cross() %>%
+  map(purrr:::lift(c))
+
+season_list <- list(
+  "P" = seq(0, 3),
+  "D" = seq(0, 1),
+  "Q" = seq(0, 3),
+  "period" = 7
+)  %>%
+  cross() %>%
+  map(purrr::lift(c))
+
+sarima_hp <- crossing(tibble("order" = order_list),
+                      tibble("season" = season_list))
+
+rm(order_list, season_list)
+
+# Time series cross validation --------------------------------------------
+
+tscv_data <- rsample::rolling_origin(
+  data = train_validation,
+  initial = 365 * 3,
+  assess = forecast_horizon,
+  cumulative = FALSE,
+  skip = forecast_horizon - 1
+) %>%
+  mutate(
+    # Extract train set for each split
+    train_set = map(splits, training),
+    # Extract validate set for each split
+    validate_set = map(splits, testing),
+    # Extract actual values to validate
+    validate_actual = map(validate_set, ~ .x[["adm"]])
+  )
+
+nani <- tscv_data$train_set[[1]]
+
+rec_nani <- recipe(adm ~ pm + temp_avg, data = nani)
+
+rec_nani <- rec_nani %>% step_center(all_predictors())
+
+train_rec <- prep(rec_nani, training = nani)
+
+train_data <- bake(train_rec, new_data = nani)
+
+# Smooth ------------------------------------------------------------------
+
+
+# tscv_split$train[[1]]$adm
+# smooth::ssarima(
+#   tscv_split$train[[1]]$adm,
+#   h = 7,
+#   silent = FALSE)
+
 # -------------------------------------------------------------------------
 # library(smooth)
 # ssarima(train$adm,
@@ -22,119 +108,3 @@
 # 
 # hist(residuals(model), breaks = 50)
 # 
-
-
-fit_sarimax(tscv_data[2,]$train[[1]],
-            tscv_data[2,]$validate[[1]],
-            tscv_data[2,]$order[[1]],
-            tscv_data[2,]$season[[1]])
-
-sarimax <- stats::arima(tscv_data[2,]$train[[1]]$adm,
-                        order = unlist(tscv_data[2,]$order[[1]]),
-                        seasonal = unlist(tscv_data[2,]$season[[1]]),
-                        xreg = tscv_data[2,]$train[[1]][,c("pm", "temp_avg")],
-                        optim.control = list(maxit = 750))
-
-
-fit_sarimax <- stats::predict(sarimax,
-                              n.ahead = 7,
-                              newxreg = tscv_data[2,]$validate[[1]][,c("pm", "temp_avg")])
-
-# -------------------------------------------------------------------------
-
-tscv_sarimax  <-
-  tscv_data[1400:1410, ] %>%
-  mutate(model = pmap(
-    list(train,
-         validate,
-         order,
-         season),
-    possibly(fit_sarimax2,
-             otherwise = NULL)
-  ))
-fit_start <- Sys.time()
-
-tscv_sarimax  <- 
-  mutate(tscv_data[2108:2115,],
-         model = future_pmap(
-    list(train,
-         order,
-         season),
-    possibly(fit_sarimax,
-             otherwise = NULL)
-    ,
-    .progress = TRUE
-  ))
-
-fit_time <- Sys.time() - fit_start
-
-# fit_start <- Sys.time()
-# 
-# tscv_sarimax  <-
-#   tscv_data[2108:2115, ] %>%
-#   mutate(model = pmap(
-#     list(train,
-#          order,
-#          season),
-#     possibly(fit_sarimax,
-#              otherwise = NULL)
-#   ))
-# 
-# fit_time <- Sys.time() - fit_start
-
-# -------------------------------------------------------------------------
-
-forecast_sarimax <- function(model, validate_set) {
-  pred_sarimax <- stats::predict(
-    object = model,
-    n.ahead = forecast_value,
-    newxreg = validate_set[,c("pm", "temp_avg")]
-  )
-}
-
-tscv_sarimax <- tscv_sarimax %>%
-  mutate(validate_predicted = map2(model,
-                                   validate,
-                                   safely(forecast_sarimax)))
-
-tscv_sarimax$model[[1]]
-
-# -------------------------------------------------------------------------
-
-
-modelo <- tscv_sarimax$model[[1]]
-pm_temp <- tscv_sarimax$validate[[1]][,c("pm","temp_avg")]
-
-forecast_value2 <- stats::predict(modelo,
-                                  n.ahead = forecast_horizon,
-                                  newxreg = pm_temp)
-
-
-fvalue2 <-
-  tscv_sarimax %>%
-  mutate(validate_predicted = map2(model,
-                                   validate,
-                                   safely(forecast_sarimax)))
-
-tscv_sarimax2 <- tscv_sarimax %>%
-  mutate(validate_predicted =  map2(
-    .x = model,
-    .y = validate,
-    ~ possibly(stats::predict(.x,
-                              n.head = forecast_horizon,
-                              newxreg = unlist(.y)),
-               otherwise = NULL)
-  ))
-
-
-
-# ------------------------------------------------------------------------
-
-# Smooth ------------------------------------------------------------------
-
-
-tscv_split$train[[1]]$adm
-smooth::ssarima(
-  tscv_split$train[[1]]$adm,
-  h = 7,
-  silent = FALSE)

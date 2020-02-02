@@ -202,7 +202,19 @@ tscv_results <- tscv_sarima %>%
     avg_smape = mean(smape),
     avg_rmse = mean(rmse)
   ) %>%
-  filter(nan_count == 0)
+  filter(nan_count == 0) %>% 
+  arrange(avg_mape)
+
+# Best model
+
+best_model_idx <- tscv_results %>% 
+  slice(which.min(avg_mape))
+
+params <-
+  str_extract_all(as.character(best_model_idx$idx), pattern = "\\d+") %>%
+  unlist()
+
+names(params) <- c("p", "d", "q", "P", "D", "Q", "period")
 
 # Best model
 #  tscv_results %>% slice(which.min(avg_mape))
@@ -214,7 +226,7 @@ log_file <-
 
 cat(
   c(
-    "SARIMA",
+    "SARIMA model",
     paste0("Fecha ejecución: ", start),
     paste0("Tiempo total de ejecución (modelo): ", format(tscv_time)),
     paste0("Horizonte de pronóstico: ", forecast_horizon),
@@ -232,7 +244,9 @@ cat(
       ))) / nrow(tscv_sarima) * 100,
       "%"
     ),
-    "===================================="
+    paste0("Mejor MAPE: ", round(min(best_model_idx$avg_mape),3), "%"),
+    "====================================",
+    "Parámetros mejor especificación"
   ),
   file = log_file,
   append = TRUE,
@@ -241,4 +255,5 @@ cat(
 
 sink(log_file, append = TRUE)
 print(tscv_results)
+print(head(tscv_results,10))
 sink()
