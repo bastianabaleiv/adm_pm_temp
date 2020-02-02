@@ -6,3 +6,6 @@
 *.txt
 *.RData
 *.csv
+*.eps
+*.dat
+*.lay
