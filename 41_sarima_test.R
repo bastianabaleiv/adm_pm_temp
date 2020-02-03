@@ -184,6 +184,7 @@ cat(
   c(
     "SARIMA univariate model - Test Set",
     paste0("Fecha ejecución: ", start),
+    paste0("Procesadores utilizados: ", detectCores()-1),
     paste0("Tiempo total de ejecución (modelo): ", format(tscv_time)),
     paste0("Horizonte de pronóstico: ", forecast_horizon),
     paste0("MAPE: ", round(min(tscv_results_test$avg_mape),3), "%"),
@@ -196,7 +197,7 @@ cat(
 )
 
 sink(log_file, append = TRUE)
-print(params)
-print(tscv_results_test)
+params
+tscv_results_test
 sink()
 

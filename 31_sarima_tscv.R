@@ -237,6 +237,7 @@ cat(
     paste0("Fecha ejecución: ", start),
     paste0("Tiempo total de ejecución (modelo): ", format(tscv_time)),
     paste0("Horizonte de pronóstico: ", forecast_horizon),
+    paste0("Procesadores utilizados: ", detectCores()-1),
     paste0("Modelos a ajustar: ", nrow(tscv_sarima)),
     paste0("Modelos no ajustados: ", sum(unlist(
       lapply(tscv_sarima$model, is.null)
@@ -261,6 +262,6 @@ cat(
 )
 
 sink(log_file, append = TRUE)
-print(tscv_results)
-print(head(tscv_results,10))
+tscv_results
+head(tscv_results,10)
 sink()
