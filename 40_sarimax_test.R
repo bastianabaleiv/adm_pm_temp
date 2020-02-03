@@ -1,8 +1,11 @@
 library(tidyverse)
 library(lubridate)
-library(furrr)
+library(foreach)
+library(doParallel)
 library(rsample)
 library(Metrics)
+
+registerDoParallel(makeCluster(detectCores()-1)) 
 
 # Sets --------------------------------------------------------------------
 
@@ -94,22 +97,27 @@ fit_sarimax <-
     ))
   }
 
-plan(multicore, workers = availableCores() - 1)
+# Fitting procedure -------------------------------------------------------
 
 start <- Sys.time()
 
-tscv_sarimax  <-
-  tscv_data %>%
-  mutate(model_fit = future_pmap(
-    list(train_set,
-         test_set,
-         order,
-         season),
-    possibly(fit_sarimax,
-             otherwise = NULL)
-    ,
-    .progress = TRUE
-  ))
+tscv_sarimax <- foreach(
+  i = 1:nrow(tscv_data),
+  .combine = rbind,
+  .packages = c("tidyverse")
+) %dopar% {
+  tscv_data[i, ] %>%
+    mutate(model_fit = pmap(
+      list(train_set,
+           validate_set,
+           order,
+           season),
+      possibly(fit_sarimax,
+               otherwise = NULL)
+      ,
+      .progress = TRUE
+    ))
+}
 
 tscv_time <- Sys.time() - start
 
