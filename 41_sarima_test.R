@@ -5,7 +5,7 @@ library(doParallel)
 library(rsample)
 library(Metrics)
 
-registerDoParallel(makeCluster(detectCores()-1)) 
+registerDoParallel(makeCluster(detectCores() - 1))
 
 # Sets --------------------------------------------------------------------
 
@@ -35,7 +35,7 @@ season_list <- list(
 sarima_hp <- crossing(tibble("order" = order_list),
                       tibble("season" = season_list))
 
-params <- c(order_list,season_list) %>% unlist()
+params <- c(order_list, season_list) %>% unlist()
 
 # rm(order_list, season_list)
 
@@ -86,9 +86,7 @@ fit_sarima <-
     fit_time <- Sys.time() - fit_start
     
     pred_sarima <- stats::predict(object = sarima,
-                                   n.ahead = forecast_horizon#,
-                                  # newxreg = test_set[, c("pm", "temp_avg")]
-                                  )$pred
+                                  n.ahead = forecast_horizon)
     
     return(list(
       model = sarima,
@@ -106,7 +104,7 @@ tscv_sarima <- foreach(
   .combine = rbind,
   .packages = c("tidyverse")
 ) %dopar% {
-  tscv_data[i, ] %>%
+  tscv_data[i,] %>%
     mutate(model_fit = pmap(
       list(train_set,
            validate_set,
@@ -114,10 +112,7 @@ tscv_sarima <- foreach(
            season),
       possibly(fit_sarima,
                otherwise = NULL)
-      ,
-      .progress = TRUE
     ))
-  
 }
 
 tscv_time <- Sys.time() - start
@@ -127,9 +122,9 @@ tscv_time <- Sys.time() - start
 tscv_sarima_test <-
   tscv_sarima %>%
   mutate(
-    date = map(tscv_sarima$test_set, ~.x[["date"]]),
+    date = map(tscv_sarima$test_set, ~ .x[["date"]]),
     model = map(tscv_sarima$model_fit, ~ .x[["model"]]),
-    test_predicted = 
+    test_predicted =
       map(tscv_sarima$model_fit, ~ .x[["test_predicted"]]),
     runtime = map(tscv_sarima$model_fit, ~ .x[["runtime"]])
   ) %>%
@@ -147,7 +142,7 @@ tscv_sarima_test <-
     smape = map2_dbl(
       test_actual,
       test_predicted,
-      possibly( ~ Metrics::smape(actual = .x, predicted = .y) * 100, 
+      possibly( ~ Metrics::smape(actual = .x, predicted = .y) * 100,
                 otherwise = NaN)
     ),
     rmse = map2_dbl(
@@ -170,11 +165,12 @@ tscv_results_test <- tscv_sarima_test %>%
 
 # Output ------------------------------------------------------------------
 
-output_path <- str_c("tscv_sarima_test_", format(start, "%Y_%m_%d_%H%M"))
+output_path <-
+  str_c("tscv_sarima_test_", format(start, "%Y_%m_%d_%H%M"))
 
-tscv_sarima_test %>% 
-  select(test_set, forecast = test_predicted) %>% 
-  unnest(c(test_set, forecast)) %>% 
+tscv_sarima_test %>%
+  select(test_set, forecast = test_predicted) %>%
+  unnest(c(test_set, forecast)) %>%
   write_csv(path = str_c(output_path, ".csv"))
 
 log_file <-
@@ -184,10 +180,12 @@ cat(
   c(
     "SARIMA univariate model - Test Set",
     paste0("Fecha ejecución: ", start),
-    paste0("Procesadores utilizados: ", detectCores()-1),
+    paste0("Procesadores utilizados: ", detectCores() - 1),
     paste0("Tiempo total de ejecución (modelo): ", format(tscv_time)),
     paste0("Horizonte de pronóstico: ", forecast_horizon),
-    paste0("MAPE: ", round(min(tscv_results_test$avg_mape),3), "%"),
+    paste0("MAPE: ", round(min(
+      tscv_results_test$avg_mape
+    ), 3), "%"),
     "====================================",
     "Parámetros especificación"
   ),
@@ -200,4 +198,3 @@ sink(log_file, append = TRUE)
 params
 tscv_results_test
 sink()
-

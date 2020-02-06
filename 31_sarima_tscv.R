@@ -7,7 +7,8 @@ library(doParallel)
 library(rsample)
 library(Metrics)
 
-registerDoParallel(makeCluster(detectCores()-1)) 
+cl <- makeCluster(detectCores() - 1, type = "FORK", outfile = "")
+registerDoParallel(cl)
 
 # Read data ---------------------------------------------------------------
 
@@ -57,7 +58,7 @@ tscv_data <- rsample::rolling_origin(
   initial = 365 * 3,
   assess = forecast_horizon,
   cumulative = FALSE,
-  skip = forecast_horizon - 1 
+  skip = forecast_horizon - 1
 ) %>%
   mutate(
     # Extract train set for each split
@@ -99,23 +100,19 @@ fit_sarima <-
       train_set$adm,
       order = unlist(order),
       seasonal = unlist(season),
-      #xreg = train_set[, c("pm", "temp_avg")],
       optim.control = list(maxit = 750)
     )
     
     fit_time <- Sys.time() - fit_start
     
     pred_sarima <- stats::predict(object = sarima,
-                                   n.ahead = forecast_horizon #, UNIVARIATE SARIMA
-                                   #newxreg = validate_set[, c("pm", "temp_avg")] 
-                                   )$pred
+                                  n.ahead = forecast_horizon)$pred
     
     return(list(
       model = sarima,
       validate_predicted = as.numeric(pred_sarima),
       runtime = fit_time
     ))
-    
   }
 
 # Fitting procedure -------------------------------------------------------
@@ -123,11 +120,11 @@ fit_sarima <-
 start <- Sys.time()
 
 tscv_sarima <- foreach(
-  i = 1:nrow(tscv_data),
+  i = 1:20,#nrow(tscv_data)
   .combine = rbind,
-  .packages = c("tidyverse")
+  .packages = c("purrr","dplyr")
 ) %dopar% {
-  tscv_data[i, ] %>%
+  tscv_data[i,] %>% 
     mutate(model_fit = pmap(
       list(train_set,
            validate_set,
@@ -135,13 +132,12 @@ tscv_sarima <- foreach(
            season),
       possibly(fit_sarima,
                otherwise = NULL)
-      ,
-      .progress = TRUE
     ))
-  
 }
 
 tscv_time <- Sys.time() - start
+
+stopCluster(cl)
 
 # Evaluation Metrics ------------------------------------------------------
 
@@ -149,7 +145,7 @@ tscv_sarima <-
   tscv_sarima %>%
   mutate(
     model = map(tscv_sarima$model_fit, ~ .x[["model"]]),
-    validate_predicted = 
+    validate_predicted =
       map(tscv_sarima$model_fit, ~ .x[["validate_predicted"]]),
     runtime = map(tscv_sarima$model_fit, ~ .x[["runtime"]])
   ) %>%
@@ -167,8 +163,8 @@ tscv_sarima <-
     smape = map2_dbl(
       validate_actual,
       validate_predicted,
-      possibly( ~ Metrics::smape(actual = .x, predicted = .y) * 100, 
-                otherwise = NaN)
+      possibly(~ Metrics::smape(actual = .x, predicted = .y) * 100,
+               otherwise = NaN)
     ),
     rmse = map2_dbl(
       validate_actual,
@@ -177,7 +173,7 @@ tscv_sarima <-
     )
   )
 
-saveRDS(tscv_sarima, 
+saveRDS(tscv_sarima,
         file = str_c("tscv_sarima_", format(start, "%Y_%m_%d_%H%M"), ".rds"))
 
 # Time series cross validation results ------------------------------------
@@ -209,12 +205,12 @@ tscv_results <- tscv_sarima %>%
     avg_smape = mean(smape),
     avg_rmse = mean(rmse)
   ) %>%
-  filter(nan_count == 0) %>% 
+  filter(nan_count == 0) %>%
   arrange(avg_mape)
 
 # Best model
 
-best_model_idx <- tscv_results %>% 
+best_model_idx <- tscv_results %>%
   slice(which.min(avg_mape))
 
 params <-
@@ -237,7 +233,7 @@ cat(
     paste0("Fecha ejecución: ", start),
     paste0("Tiempo total de ejecución (modelo): ", format(tscv_time)),
     paste0("Horizonte de pronóstico: ", forecast_horizon),
-    paste0("Procesadores utilizados: ", detectCores()-1),
+    paste0("Procesadores utilizados: ", detectCores() - 1),
     paste0("Modelos a ajustar: ", nrow(tscv_sarima)),
     paste0("Modelos no ajustados: ", sum(unlist(
       lapply(tscv_sarima$model, is.null)
@@ -252,7 +248,9 @@ cat(
       ))) / nrow(tscv_sarima) * 100,
       "%"
     ),
-    paste0("Mejor MAPE: ", round(min(best_model_idx$avg_mape),3), "%"),
+    paste0("Mejor MAPE: ", round(min(
+      best_model_idx$avg_mape
+    ), 3), "%"),
     "====================================",
     "Parámetros mejor especificación"
   ),
@@ -263,5 +261,5 @@ cat(
 
 sink(log_file, append = TRUE)
 tscv_results
-head(tscv_results,10)
+head(tscv_results, 10)
 sink()

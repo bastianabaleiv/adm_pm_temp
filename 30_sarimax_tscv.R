@@ -7,7 +7,8 @@ library(doParallel)
 library(rsample)
 library(Metrics)
 
-registerDoParallel(makeCluster(detectCores()-1)) 
+cl <- makeCluster(detectCores() - 1, outfile = "")
+registerDoParallel(cl)
 
 # Read data ---------------------------------------------------------------
 
@@ -107,7 +108,7 @@ fit_sarimax <-
     
     pred_sarimax <- stats::predict(object = sarimax,
                                    n.ahead = forecast_horizon,
-                                   newxreg = 
+                                   newxreg =
                                      validate_set[, c("pm", "temp_avg")])$pred
     
     return(list(
@@ -123,11 +124,11 @@ fit_sarimax <-
 start <- Sys.time()
 
 tscv_sarimax <- foreach(
-  i = 1:nrow(tscv_data),
+  i = 1:100,
   .combine = rbind,
-  .packages = c("tidyverse")
+  .packages = c("purrr","dplyr")
 ) %dopar% {
-  tscv_data[i, ] %>%
+  tscv_data[i,] %>%
     mutate(model_fit = pmap(
       list(train_set,
            validate_set,
@@ -135,12 +136,12 @@ tscv_sarimax <- foreach(
            season),
       possibly(fit_sarimax,
                otherwise = NULL)
-      ,
-      .progress = TRUE
     ))
 }
 
 tscv_time <- Sys.time() - start
+
+stopCluster(cl)
 
 # Evaluation Metrics ------------------------------------------------------
 
@@ -148,7 +149,7 @@ tscv_sarimax <-
   tscv_sarimax %>%
   mutate(
     model = map(tscv_sarimax$model_fit, ~ .x[["model"]]),
-    validate_predicted = 
+    validate_predicted =
       map(tscv_sarimax$model_fit, ~ .x[["validate_predicted"]]),
     runtime = map(tscv_sarimax$model_fit, ~ .x[["runtime"]])
   ) %>%
@@ -166,8 +167,8 @@ tscv_sarimax <-
     smape = map2_dbl(
       validate_actual,
       validate_predicted,
-      possibly( ~ Metrics::smape(actual = .x, predicted = .y) * 100, 
-                otherwise = NaN)
+      possibly(~ Metrics::smape(actual = .x, predicted = .y) * 100,
+               otherwise = NaN)
     ),
     rmse = map2_dbl(
       validate_actual,
@@ -176,7 +177,7 @@ tscv_sarimax <-
     )
   )
 
-saveRDS(tscv_sarimax, 
+saveRDS(tscv_sarimax,
         file = str_c("tscv_sarimax_", format(start, "%Y_%m_%d_%H%M"), ".rds"))
 
 # Time series cross validation results ------------------------------------
@@ -208,12 +209,12 @@ tscv_results <- tscv_sarimax %>%
     avg_smape = mean(smape),
     avg_rmse = mean(rmse)
   ) %>%
-  filter(nan_count == 0) %>% 
+  filter(nan_count == 0) %>%
   arrange(avg_mape)
 
 # Best model
 
-best_model_idx <- tscv_results %>% 
+best_model_idx <- tscv_results %>%
   slice(which.min(avg_mape))
 
 params <-
@@ -233,7 +234,7 @@ cat(
     paste0("Fecha ejecución: ", start),
     paste0("Tiempo total de ejecución (modelo): ", format(tscv_time)),
     paste0("Horizonte de pronóstico: ", forecast_horizon),
-    paste0("Procesadores utilizados: ", detectCores()-1),
+    paste0("Procesadores utilizados: ", detectCores() - 1),
     paste0("Modelos a ajustar: ", nrow(tscv_sarimax)),
     paste0("Modelos no ajustados: ", sum(unlist(
       lapply(tscv_sarimax$model, is.null)
@@ -248,7 +249,9 @@ cat(
       ))) / nrow(tscv_sarimax) * 100,
       "%"
     ),
-    paste0("Mejor MAPE: ", round(min(best_model_idx$avg_mape),3), "%"),
+    paste0("Mejor MAPE: ", round(min(
+      best_model_idx$avg_mape
+    ), 3), "%"),
     "====================================",
     "Parámetros mejor especificación"
   ),
@@ -259,5 +262,5 @@ cat(
 
 sink(log_file, append = TRUE)
 params
-head(tscv_results,10)
+head(tscv_results, 10)
 sink()
