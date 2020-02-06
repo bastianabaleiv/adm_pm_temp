@@ -1,12 +1,16 @@
+# Pkgs --------------------------------------------------------------------
+
 library(tidyverse)
 library(lubridate)
-library(foreach)
-library(doParallel)
+# library(foreach)
+# library(doParallel)
+library(doMC)
 library(rsample)
 library(Metrics)
 
-cl <- makeCluster(detectCores() - 1, outfile = "")
-registerDoParallel(cl)
+# cl <- makeCluster(detectCores() - 1, type = "FORK", outfile = "")
+# registerDoParallel(cl)
+registerDoMC(detectCores()-1)
 
 # Sets --------------------------------------------------------------------
 
@@ -120,7 +124,7 @@ tscv_sarimax <- foreach(
 
 tscv_time <- Sys.time() - start
 
-stopCluster(cl)
+#stopCluster(cl)
 
 # Evaluation Metrics ------------------------------------------------------
 

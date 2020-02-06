@@ -2,13 +2,15 @@
 
 library(tidyverse)
 library(lubridate)
-library(foreach)
-library(doParallel)
+# library(foreach)
+# library(doParallel)
+library(doMC)
 library(rsample)
 library(Metrics)
 
-cl <- makeCluster(detectCores() - 1, type = "FORK", outfile = "")
-registerDoParallel(cl)
+# cl <- makeCluster(detectCores() - 1, type = "FORK", outfile = "")
+# registerDoParallel(cl)
+registerDoMC(detectCores()-1)
 
 # Read data ---------------------------------------------------------------
 
@@ -120,7 +122,7 @@ fit_sarima <-
 start <- Sys.time()
 
 tscv_sarima <- foreach(
-  i = 1:20,#nrow(tscv_data)
+  i = 1:nrow(tscv_data),
   .combine = rbind,
   .packages = c("purrr","dplyr")
 ) %dopar% {
@@ -137,7 +139,7 @@ tscv_sarima <- foreach(
 
 tscv_time <- Sys.time() - start
 
-stopCluster(cl)
+#stopCluster(cl)
 
 # Evaluation Metrics ------------------------------------------------------
 
