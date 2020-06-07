@@ -32,17 +32,32 @@ train_validation <- rbind(train, validation)
 forecast_horizon <- 7 # c(1,7,14,21,28)
 
 # Grid --------------------------------------------------------------------
+# 
+# order_list <- list("p" = seq(0, 3),
+#                    "d" = seq(0, 1),
+#                    "q" = seq(0, 3)) %>%
+#   cross() %>%
+#   map(purrr:::lift(c))
+# 
+# season_list <- list(
+#   "P" = seq(0, 3),
+#   "D" = seq(0, 1),
+#   "Q" = seq(0, 3),
+#   "period" = 7
+# )  %>%
+#   cross() %>%
+#   map(purrr::lift(c))
 
-order_list <- list("p" = seq(0, 3),
-                   "d" = seq(0, 1),
-                   "q" = seq(0, 3)) %>%
+order_list <- list("p" = seq(2,3),
+                   "d" = 1,
+                   "q" = 0) %>%
   cross() %>%
   map(purrr:::lift(c))
 
 season_list <- list(
-  "P" = seq(0, 3),
-  "D" = seq(0, 1),
-  "Q" = seq(0, 3),
+  "P" = 1,
+  "D" = 0,
+  "Q" = seq(2,3),
   "period" = 7
 )  %>%
   cross() %>%
@@ -122,11 +137,11 @@ fit_sarima <-
 start <- Sys.time()
 
 tscv_sarima <- foreach(
-  i = 1:nrow(tscv_data),
+  i = 1:nrow(tscv_data),# 1:nrow(tscv_data)
   .combine = rbind,
   .packages = c("purrr","dplyr")
 ) %dopar% {
-  tscv_data[i,] %>% 
+  tscv_data[i,] %>%
     mutate(model_fit = pmap(
       list(train_set,
            validate_set,
@@ -139,7 +154,7 @@ tscv_sarima <- foreach(
 
 tscv_time <- Sys.time() - start
 
-#stopCluster(cl)
+# stopCluster(cl)
 
 # Evaluation Metrics ------------------------------------------------------
 
@@ -262,6 +277,6 @@ cat(
 )
 
 sink(log_file, append = TRUE)
-tscv_results
+params
 head(tscv_results, 10)
 sink()

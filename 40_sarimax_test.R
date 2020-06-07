@@ -114,7 +114,7 @@ tscv_sarimax <- foreach(
   tscv_data[i, ] %>%
     mutate(model_fit = pmap(
       list(train_set,
-           validate_set,
+           test_set,
            order,
            season),
       possibly(fit_sarimax,
@@ -202,6 +202,6 @@ cat(
 )
 
 sink(log_file, append = TRUE)
-params
-tscv_results_test
+print(params)
+print(tscv_results_test)
 sink()

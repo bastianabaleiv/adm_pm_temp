@@ -9,9 +9,21 @@ library(lubridate)
 cbbPalette <- c("#000000", "#009E73", "#e79f00", "#9ad0f3", "#0072B2", "#D55E00", 
                 "#CC79A7", "#F0E442")
 
+theme_setting <- theme(
+  panel.background = element_blank(),
+  panel.grid.major.y = element_line(color="grey90", size=0.5),
+  panel.grid.major.x = element_line(color="grey90", size=0.5),
+  panel.border = element_rect(fill=NA, color="grey20")#,
+ # axis.text = element_text(family="Times"),
+ # axis.title = element_text(family="Times"),
+ # plot.title = element_text(size=10, hjust=0.5, family="Times")
+ )
+
+source("functions.R")
+
 # Load data ---------------------------------------------------------------
 
-load('data/adm_pm_temp.RData')
+adm_pm_temp <- read_csv('data/adm_pm_temp.csv')
 
 # Time Series Plots -------------------------------------------------------
 
@@ -49,7 +61,7 @@ pm_plot <- ggplot(adm_pm_temp, aes(date, pm)) +
     size = 0.6
   ) 
 
-temp_plot <- ggplot(adm_pm_temp, aes(date, temp_avg)) +
+temp_plot <- ggplot(adm_pm_temp, aes(date, temp)) +
   geom_line() +
   theme_half_open() +
   background_grid() +
@@ -83,13 +95,13 @@ plot_grid(
   ncol = 1, align = "v"
 )
 
-# Adm vs Temp -------------------------------------------------------------
+ # Adm vs Temp -------------------------------------------------------------
 
 adm_pm_temp %>%
   as.data.frame() %>%
-  ggplot(aes(x = temp_min, y = adm)) + geom_point() +
-  xlab("Min. Temperature (degrees Celsius)") +
-  ylab("Admissions (person)") +
+  ggplot(aes(x = temp, y = adm)) + geom_point() +
+  xlab("Temperature [°C]") +
+  ylab("Admissions [person]") +
   theme_half_open() +
   background_grid() 
 
@@ -98,30 +110,133 @@ adm_pm_temp %>%
 adm_pm_temp %>%
   as.data.frame() %>%
   ggplot(aes(x = pm, y = adm)) + geom_point() +
-  xlab("PM 2.5 (ug/m3)") +
-  ylab("Admissions (person)") +
+  xlab(expression(paste("PM 2.5 [ug/",m^{3},"]"))) +
+  ylab("Admissions [person]") +
   theme_half_open() +
   background_grid() 
 
 # PM 2.5 vs Temp ----------------------------------------------------------
 
 adm_pm_temp %>%
-  as.data.frame() %>%
-  ggplot(aes(x = temp_min, y = pm)) + geom_point() +
-  xlab("Min. Temperature (degrees Celsius)") +
-  ylab("PM 2.5 (ug/m3)") +
+  ggplot(aes(x = temp, y = pm, color = adm)) + geom_point() +
+  xlab("Temperature [°C]") +
+  ylab(expression(paste("PM 2.5 [ug/",m^{3},"]"))) +
   theme_half_open() +
-  background_grid() 
+  background_grid() +
+  scale_color_gradient(low = "green", high = "red")
+
+# ACF/PACF ----------------------------------------------------------------
+
+# Adm
+
+adm_tscf <- plot_tscf(adm_pm_temp$adm,
+         lag = 91,
+         title = "Admissions",
+         breaks = 7)
+
+adm_tscf$acf
+adm_tscf$pacf
+
+# Temp
+
+temp_tscf <- plot_tscf(adm_pm_temp$temp,
+                       lag = 91,
+                       title = "Temperature",
+                       breaks = 7)
+
+temp_tscf$acf
+temp_tscf$pacf
+
+# PM
+
+pm_tscf <- plot_tscf(adm_pm_temp$pm,
+                       lag = 91,
+                       title = "PM 2.5",
+                       breaks = 7)
+
+pm_tscf$acf
+pm_tscf$pacf
+
+# Calendar HeatMap
+library("sugrrants") # [!]
+library(viridis)
+
+adm_heatmap <- adm_pm_temp %>% 
+  frame_calendar(x = 1, y = 1, date = date, calendar = "monthly", ncol = 12) %>% 
+  ggplot(aes(x = .x, y = .y)) +
+  geom_tile(aes(fill = adm), colour = "grey50") +
+  scale_fill_viridis()
+
+prettify(adm_heatmap, 
+         label = c("label","text"), 
+         label.padding = unit(0.1, "lines"),
+         week_start = -1)
+
+# adm_pm_temp %>%
+#   ggplot(aes(x = weekday, y = adm, color = temp)) + geom_point() +
+#  # xlab("Temperature [°C]") +
+#  # ylab(expression(paste("PM 2.5 [ug/",m^{3},"]"))) +
+#   theme_half_open() +
+#   background_grid() +
+#   scale_color_gradient(low = "green", high = "red")
+
+ggplot(adm_pm_temp, aes(x = weekday, y = adm, group = weekday)) +
+  geom_boxplot(fill = "gray") +
+  labs(title = "", x = "Weekday", y = "Admission") +
+  theme_classic()
+
+ggplot(adm_pm_temp, aes(x = month, y = adm, group = month)) +
+  geom_boxplot(fill = "gray") +
+  labs(title = "", x = "Month", y = "Admission") +
+  theme_classic()
+
+ggplot(adm_pm_temp, aes(x = weekend, y = adm, group = weekend)) +
+  geom_boxplot(fill = "gray") +
+  labs(title = "", x = "Month", y = "Admission") +
+  theme_classic()
+
+ggplot(adm_pm_temp, aes(x = day, y = adm, group = day)) +
+  geom_boxplot(fill = "gray") +
+  labs(title = "", x = "Day", y = "Admission") +
+  theme_classic()
 
 
+library(GGally)
 
+ggpairs(adm_pm_temp[c("adm","pm","temp")],
+        columns = 1:3,
+        title = "",
+        axisLabels = "show")
 
-# library(GGally)
 # 
-# ggpairs(adm_pm_temp[c("adm","pm","temp_min")],
-#         columns = 1:3,
-#         title = "",
-#         axisLabels = "show")
+# #############3
+# ###
+# library(latticeExtra) 
+# 
+# # create data
+# set.seed(1) 
+# data <- data.frame(x = rnorm(100), y = rnorm(100)) 
+# data$z <- with(data, x * y + rnorm(100, sd = 1)) 
+# 
+# # showing data points on the same color scale 
+# levelplot(adm ~ pm * temp, adm_pm_temp,
+#           panel = panel.levelplot.points, cex = 1.2) 
+# 
+# 
+# ###
+# 
+# library("scatterplot3d")
+# scatterplot3d(adm_pm_temp[,c("pm","temp","adm")],
+#               pch = 16,
+#               type = "h")
+# 
+# ggplot(adm_pm_temp,
+#        aes(temp, pm, z = adm)) +
+#   geom_contour_filled()
+# 
+
+
+
 # Thu Sep 26 23:19:33 2019 ------------------------------
 
 

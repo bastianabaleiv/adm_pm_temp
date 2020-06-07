@@ -33,16 +33,16 @@ forecast_horizon <- 7 # c(1,7,14,21,28)
 
 # Grid --------------------------------------------------------------------
 
-order_list <- list("p" = seq(0, 1),
-                   "d" = seq(1, 1),
-                   "q" = seq(0, 1)) %>%
+order_list <- list("p" = seq(0, 3),
+                   "d" = seq(0, 2),
+                   "q" = seq(0, 3)) %>%
   cross() %>%
   map(purrr:::lift(c))
 
 season_list <- list(
-  "P" = seq(0, 1),
-  "D" = seq(1, 1),
-  "Q" = seq(0, 1),
+  "P" = seq(0, 3),
+  "D" = seq(0, 2),
+  "Q" = seq(0, 3),
   "period" = 7
 )  %>%
   cross() %>%
@@ -126,7 +126,7 @@ fit_sarimax <-
 start <- Sys.time()
 
 tscv_sarimax <- foreach(
-  i = 1:100,
+  i = 1:nrow(tscv_data),
   .combine = rbind,
   .packages = c("purrr","dplyr")
 ) %dopar% {
