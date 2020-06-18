@@ -14,16 +14,18 @@ registerDoMC(detectCores()-1)
 
 # Read data ---------------------------------------------------------------
 
-apt_df <- readRDS('data/adm_pm_temp.rds')
+adm_pm_temp <- read_csv('data/adm_pm_temp.csv')
 
 # Train/Validation/Test sets ----------------------------------------------
 
-train <- apt_df %>% filter(date < "2017-01-01")
+train <- adm_pm_temp %>% 
+  filter(date < "2017-01-01")
 
 validation <-
-  apt_df %>% filter(date >= "2017-01-01" & date < "2018-01-01")
+  adm_pm_temp %>% 
+  filter(date >= "2017-01-01" & date < "2018-01-01")
 
-test <- apt_df %>% filter(date >= "2018-01-01")
+test <- adm_pm_temp %>% filter(date >= "2018-01-01")
 
 train_validation <- rbind(train, validation)
 

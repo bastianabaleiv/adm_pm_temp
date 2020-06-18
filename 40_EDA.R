@@ -5,6 +5,8 @@ library(cowplot)
 library(reshape2)
 library(RColorBrewer)
 library(lubridate)
+library(scales)
+library(plotly)
 
 cbbPalette <- c("#000000", "#009E73", "#e79f00", "#9ad0f3", "#0072B2", "#D55E00", 
                 "#CC79A7", "#F0E442")
@@ -95,7 +97,7 @@ plot_grid(
   ncol = 1, align = "v"
 )
 
- # Adm vs Temp -------------------------------------------------------------
+# Adm vs Temp -------------------------------------------------------------
 
 adm_pm_temp %>%
   as.data.frame() %>%
@@ -104,6 +106,79 @@ adm_pm_temp %>%
   ylab("Admissions [person]") +
   theme_half_open() +
   background_grid() 
+
+# Adm yearly --------------------------------------------------------------
+
+adm_pm_temp %>% 
+  mutate(commondate = as.Date(paste0("2000-",format(date, "%j")), "%Y-%j"),
+         year = year(date),
+         observance = ifelse(holiday == TRUE, adm, NA)) %>% 
+  ggplot(adm_pm_temp,
+         mapping = aes(x = commondate,
+                       y = adm)) +
+  geom_line() + 
+  facet_grid(facets = year ~ .) +
+  theme_half_open() +
+  background_grid() +
+  scale_x_date(labels = function(x) format(x, "%b"),
+               breaks = date_breaks("1 months")) +
+  ylab("Admissions [person]") +
+  xlab("Date")
+
+# Adm yearly with observances ---------------------------------------------
+plot_adm_yearly_observances <- adm_pm_temp %>% 
+  mutate(commondate = as.Date(paste0("2000-",format(date, "%j")), "%Y-%j"),
+         year = year(date),
+         observance = ifelse(holiday == TRUE, adm, NA)) %>% 
+  ggplot(mapping = aes(x = commondate,
+                       y = adm)) +
+  geom_line() + 
+  facet_grid(facets = year ~ .) +
+  theme_half_open() +
+  background_grid() +
+  scale_x_date(labels = function(x) format(x, "%b"),
+               breaks = date_breaks("1 months")) +
+  ylab("Admissions [person]") +
+  xlab("Date") +
+  geom_point(aes(x = commondate, y = observance), size = 2, color = "red")
+
+plot_adm_yearly_observances
+
+#ggplotly(plot_adm_yearly_observances)
+
+# PM yearly ---------------------------------------------------------------
+
+adm_pm_temp %>% 
+  mutate(commondate = as.Date(paste0("2000-",format(date, "%j")), "%Y-%j"),
+         year = year(date)) %>% 
+  ggplot(adm_pm_temp,
+         mapping = aes(x = commondate,
+                       y = pm)) +
+  geom_line() + 
+  facet_grid(facets = year ~ .) +
+  theme_half_open() +
+  background_grid() +
+  scale_x_date(labels = function(x) format(x, "%b"),
+               breaks = date_breaks("1 months")) +
+  ylab(expression(paste("PM 2.5 [ug/",m^{3},"]"))) +
+  xlab("Date")
+
+# Temp Yearly -------------------------------------------------------------
+
+adm_pm_temp %>% 
+  mutate(commondate = as.Date(paste0("2000-",format(date, "%j")), "%Y-%j"),
+         year = year(date)) %>% 
+  ggplot(adm_pm_temp,
+         mapping = aes(x = commondate,
+                       y = temp)) +
+  geom_line() + 
+  facet_grid(facets = year ~ .) +
+  theme_half_open() +
+  background_grid() +
+  scale_x_date(labels = function(x) format(x, "%b"),
+               breaks = date_breaks("1 months")) +
+  ylab("Temperature [°C]") +
+  xlab("Date")
 
 # Adm vs PM 2.5 -----------------------------------------------------------
 
@@ -124,6 +199,55 @@ adm_pm_temp %>%
   theme_half_open() +
   background_grid() +
   scale_color_gradient(low = "green", high = "red")
+
+# Histogram of raw observations -------------------------------------------
+
+ggplot(adm_pm_temp, aes(x = adm)) + 
+  geom_histogram(color = "black", fill="white") +
+  theme_half_open() +
+  background_grid() +
+  geom_vline(aes(xintercept = mean(adm)),
+             linetype="dashed",
+             color = "red")
+
+ggplot(adm_pm_temp, aes(x = pm)) + 
+  geom_histogram(color = "black", fill="white") +
+  theme_half_open() +
+  background_grid() +
+  geom_vline(aes(xintercept = mean(pm)),
+             linetype="dashed",
+             color = "red")
+
+ggplot(adm_pm_temp, aes(x = temp)) + 
+  geom_histogram(color = "black", fill="white") +
+  theme_half_open() +
+  background_grid() +
+  geom_vline(aes(xintercept = mean(temp)),
+             linetype="dashed",
+             color = "red")
+
+#  TEST -------------------------------------------------------------------
+
+ggplot(adm_pm_temp, aes(x = temp)) + 
+  geom_histogram(aes(y=..density..), position="identity", alpha=0.5,color = "black", fill="white") +
+  geom_density(alpha=0.6) +
+  theme_half_open() +
+  background_grid() +
+  geom_vline(aes(xintercept = mean(temp)),
+             linetype="dashed",
+             color = "red")
+
+adm_pm_temp %>% ggplot(aes(adm)) +
+  geom_histogram(aes(y = stat(density)),
+                 binwidth = 60,
+                 col = "black",
+                 fill = "gray90") +
+  geom_density(aes(y = ..density..), col = 'red')
+
+ggplot(adm_pm_temp, aes(x = adm, color = weekend)) + 
+  geom_histogram(fill="white", position = "dodge") +
+  theme_half_open() +
+  background_grid()
 
 # ACF/PACF ----------------------------------------------------------------
 
@@ -299,5 +423,3 @@ ggpairs(adm_pm_temp[c("adm","pm","temp")],
 #     )
 # 
 # save_plot('figures/load_plot.png', load_plot, base_aspect_ratio = 2)
-
-

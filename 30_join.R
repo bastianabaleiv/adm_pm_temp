@@ -12,6 +12,7 @@ setwd("/home/baballay/adm_pm_temp")
 
 adm_pm_tbl <- read_csv("data/adm_pm.csv")
 temp_tbl <- read_csv("data/temp.csv")
+observances_tbl <- read_csv('data/observances.csv')
 
 # Consolidate dataset -----------------------------------------------------
 
@@ -24,9 +25,11 @@ adm_pm_temp <- left_join(adm_pm_tbl, temp_tbl, by = "date") %>%
                         week_start = getOption("lubridate.week.start", 
                                                1)),
          weekend = if_else(weekday %in% 
-                             c(6, 7), "weekend", "weekday"),
+                             c(6, 7), 1, 0),
          yearday = yday(date)
   )
+
+adm_pm_temp$holiday <- as.numeric(adm_pm_temp$date %in% observances_tbl$observance_date)
 
 # Save file ---------------------------------------------------------------
 
