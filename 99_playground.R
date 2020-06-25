@@ -260,3 +260,21 @@ tscv_time <- Sys.time() - start
 # 
 # hist(residuals(model), breaks = 50)
 # 
+
+# # auto.arima try ----------------------------------------------------------
+# fitted_autodhrm <- 
+#   auto.arima(y = y_train$adm,
+#              d = 0,
+#              D = 0,
+#              max.p = 14,
+#              max.q = 14,
+#              stationary = TRUE,
+#              ic = "aicc",
+#              trace = TRUE,
+#              xreg = as.matrix(x_train),
+#              stepwise = TRUE)
+# 
+# plot(na.omit(train_validation)$adm,type = "l")
+# lines(fitted_autodhrm$fitted, col = "red")
+# residuals(fitted_autodhrm)
+

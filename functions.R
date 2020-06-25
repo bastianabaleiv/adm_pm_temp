@@ -1,3 +1,19 @@
+append_lags <- function(x, lags, col.name = NULL) {
+  
+  lags_list <-  map(lags, ~ lag(x, .x))
+  
+  if (!is.null(col.name)) {
+    lags_names <- paste0(col.name, "_lag_", lags)
+  } else {
+    lags_names <- paste0("lag_", lags)
+  }
+  
+  names(lags_list) <- lags_names
+  
+  lags <- bind_rows(lags_list) 
+  
+}
+
 plot_tscf <- function(x,
                      lag,
                      title,
