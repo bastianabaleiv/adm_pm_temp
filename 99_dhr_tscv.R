@@ -1,6 +1,6 @@
 # Pkgs --------------------------------------------------------------------
 
-suppressPackageStartupMessages({
+#suppressPackageStartupMessages({
 library(tidyverse)
 library(lubridate)
 library(doMC)
@@ -8,7 +8,7 @@ library(rsample)
 library(Metrics)
 library(forecast)
 library(tsutils)
-})
+#})
 
 # Functions ---------------------------------------------------------------
 
@@ -18,16 +18,32 @@ source("functions.R")
 
 adm_pm_temp <- read_csv('data/adm_pm_temp.csv') 
 
+# Parameters --------------------------------------------------------------
+
+arima_p <- 0:10
+arima_d <- 0
+arima_q <- 0:10
+fourier_weekly <- 1:3
+fourier_yearly <- 1:5
+
+# Forecast Horizon --------------------------------------------------------
+
+forecast_horizon <- 7 # c(7,14,21,28)
+
 # Train/Validation/Test sets ----------------------------------------------
 
-train <- adm_pm_temp %>% filter(date < "2017-01-01")
+train <- adm_pm_temp %>% 
+  filter(date < "2017-01-01")
 
 validation <-
-  adm_pm_temp %>% filter(date >= "2017-01-01" & date < "2018-01-01")
+  adm_pm_temp %>% 
+  filter(date >= "2017-01-01" & date < "2018-01-01")
 
-test <- adm_pm_temp %>% filter(date >= "2018-01-01")
+test <- adm_pm_temp %>% 
+  filter(date >= "2018-01-01")
 
-train_validation <- rbind(train, validation)
+train_validation <- rbind(train, validation) %>% 
+  mutate(index = row_number())
 
 # Predictors --------------------------------------------------------------
 
@@ -52,76 +68,41 @@ train_validation <- cbind(
     col.name = "pm"
   )
 ) %>% 
-  dplyr::select(date,vars)
+  dplyr::select(index,date,all_of(vars))
 
-# Parameters --------------------------------------------------------------
+# Grids -------------------------------------------------------------------
 
-fourier_weekly <- 3
-fourier_yearly <- 3
-
-# Fourier terms -----------------------------------------------------------
-
-fourier_vars <- forecast::fourier(
-  x = msts(train_validation$adm,
-           seasonal.periods = c(7, 365.25)),
-  K = c(fourier_weekly, fourier_yearly)
-)
-
-vars <- c(vars,colnames(fourier_vars))
-
-train_validation <-
-  cbind(train_validation, fourier_vars)
-
-
-# Forecast Horizon --------------------------------------------------------
-
-forecast_horizon <- 7 # c(1,7,14,21,28)
-
-# Grid --------------------------------------------------------------------
-
-order_list <- list("p" = 0:10,
-                   "d" = 0,
-                   "q" = 0:10) %>%
+order_list <- list("p" = arima_p,
+                   "d" = arima_d,
+                   "q" = arima_q) %>%
   cross() %>%
   map(purrr:::lift(c))
 
-fourier_list <- list(weekly = 1:k_fourier,
-                     yearly = 1:k_fourier) %>%
+fourier_list <- list(weekly = fourier_weekly,
+                     yearly = fourier_yearly) %>%
   cross() %>%
   map(purrr:::lift(c))
 
 dyn_har_reg_hp <- crossing(tibble("order" = order_list),
                            tibble("fourier" = fourier_list))
 
-rm(order_list, fourier_list)
-
-
-# -------------------------------------------------------------------------
-
-
-
-train_validation <- na.omit(train_validation[vars])
-
-y_train <- train_validation %>% dplyr::select(adm)
-x_train <- train_validation %>% dplyr::select(-adm)
-
 # Time series cross validation --------------------------------------------
 
 tscv_data <- 
   train_validation %>% 
   rsample::rolling_origin(
-  initial = 365 * 3 - max(colSums(is.na(train_validation))),
-  assess = forecast_horizon,
-  cumulative = FALSE,
-  skip = forecast_horizon - 1
-) %>%
+    initial = 365 * 3, # Training setup  |  max(colSums(is.na(train_validation)))
+    assess = forecast_horizon, # Forecast setup
+    cumulative = FALSE, # growing n?
+    skip = forecast_horizon - 1
+  ) %>%
   mutate(
     # Extract train set for each split
     train_set = map(splits, training),
     # Extract validate set for each split
     validate_set = map(splits, testing),
     # Extract actual values to validate
-    validate_actual = map(validate_set, ~ .x[["adm"]])
+    validate_actual = map(validate_set, ~ .x[["adm"]]) # y_{t} name
   )
 
 start_date <-
@@ -130,7 +111,8 @@ start_date <-
 
 tscv_data$start_date <- do.call("c", start_date)
 
-tscv_data <- tscv_data %>% expand_grid(dyn_har_reg_hp)
+tscv_data <- tscv_data %>% 
+  expand_grid(dyn_har_reg_hp)
 
 tscv_data$idx <- as.factor(str_c(
   "idx",
@@ -141,64 +123,83 @@ tscv_data$idx <- as.factor(str_c(
   sep = "_"
 ))
 
-# Sun Jun 14 00:10:29 2020 ------------------------------
+# Fourier Regressors ------------------------------------------------------
 
-nani <- tscv_data[800,]$train_set[[1]]
+fit_dhr <- function(train_set,
+                    validate_set,
+                    order,
+                    fourier,
+                    train_validation){
+  
+}
 
-drops <- c("date",
-           "month",
-           "day",
-           "weekday",
-           "weekend",
-           "yearday",
-           "anomaly",
-           "holiday")
-
-dhr <- stats::arima(
-  x = nani$adm,
-  order = unlist(tscv_data[800,]$order),
-  xreg = nani[,c("pm","temp","holiday","S1-7","C1-7","S1-365","C1-365",
-                 "S2-7","C2-7","S2-365","C2-365",
-                 "S3-7","C3-7","S3-365","C3-365",
-                 "temp_lag_1",
-                 "temp_lag_2",
-                 "temp_lag_7",
-                 "pm_lag_1",
-                 "pm_lag_7",
-                 "anomaly")]
+# Fourier xreg
+fourier_cols <- forecast::fourier(
+  x = msts(train_validation$adm,
+           seasonal.periods = c(7, 365.25)), # multiseasonal periods
+  K = unlist(tscv_data[80000,]$fourier)
 )
 
-plot(nani$adm, type = "l")
-lines(nani$adm+dhr$residuals, col = "red")
+fourier_train <- fourier_cols[tscv_data$train_set[[80000]]$index,]
+fourier_validate <- fourier_cols[tscv_data$validate_set[[80000]]$index,]
+
+train <- cbind(tscv_data$train_set[[80000]], fourier_train)
+validate <- cbind(tscv_data$validate_set[[80000]], fourier_validate)
+
+y_train <- na.omit(train) %>% 
+  dplyr::select(adm)
+
+x_train <- na.omit(train) %>% 
+  dplyr::select(-c(index,date,adm))
+
+fit_start <- Sys.time()
+
+dhr <- stats::arima(
+  x = y_train,
+  order = tscv_data$order[[80000]],
+  xreg = x_train
+)
+
+fit_time <- Sys.time() - fit_start
+
+saveRDS(dhr,
+        file = str_c("tscv_dhr_", 
+                     format(start, "%Y_%m_%d_%H%M"), 
+                     ".rds"))
+
+plot(y_train$adm, type = "l")
+lines(y_train$adm+dhr$residuals, col = "red")
 hist(dhr$residuals)
 
-gku
-  function(train_set,
-           validate_set,
-           order,
-           ...) {
-      
-    fit_start <- Sys.time()
-    
-    dhr <- stats::arima(
-      train_set$adm,
-      order = unlist(order),
-      xreg = train_set[, c("pm", "temp")],
-      optim.control = list(maxit = 750)
-    )
-    
-    fit_time <- Sys.time() - fit_start
-    
-    pred_sarimax <- stats::predict(object = sarimax,
-                                   n.ahead = forecast_horizon,
-                                   newxreg =
-                                     validate_set[, c("pm", "temp_avg")])$pred
-    
-    return(list(
-      model = sarimax,
-      validate_predicted = as.numeric(pred_sarimax),
-      runtime = fit_time
-    ))
-    
-  }
+x_validate <- na.omit(validate) %>% 
+  dplyr::select(-c(index,date,adm))
 
+forecast_dhr <- 
+  as.numeric(
+  stats::predict(
+    object = dhr,
+    n.ahead = forecast_horizon,
+    newxreg = as.matrix(x_validate)
+  )$pred)
+
+results <- data.frame(date = validate$date,
+                 actual = validate$adm,
+      predicted = forecast_dhr)
+
+y_sup <- max(c(validate$adm,forecast_dhr))+100
+y_inf <- min(c(validate$adm,forecast_dhr))-100
+
+plot(validate$adm, type = "o", ylim = c(y_inf,y_sup))
+lines(forecast_dhr, col = "red", ylim = c(y_inf,y_sup))
+points(forecast_dhr, col = "red", ylim = c(y_inf,y_sup))
+
+ggplot(results, aes(date)) +
+  geom_line(aes(y = actual, colour = "actual")) +
+  geom_line(aes(y = predicted, colour = "predicted"))
+    
+# save RDS model
+
+return(list(
+  validate_predicted = as.numeric(pred_sarimax),
+  runtime = fit_time
+))

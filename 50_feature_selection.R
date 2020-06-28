@@ -3,7 +3,6 @@
 suppressPackageStartupMessages({
   library(tidyverse)
   library(MASS)
-  library(MuMIn)
 })
 
 # Functions ---------------------------------------------------------------
