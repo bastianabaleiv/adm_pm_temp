@@ -278,3 +278,27 @@ tscv_time <- Sys.time() - start
 # lines(fitted_autodhrm$fitted, col = "red")
 # residuals(fitted_autodhrm)
 
+# -------------------------------------------------------------------------
+library(furrr)
+
+plan(multicore, workers = detectCores()-1)
+
+start <- Sys.time()
+
+tscv_dhr  <-   tscv_data[80000:80010,] %>%
+  mutate(model_fit = furrr::future_pmap(
+    list(train_set,
+         validate_set,
+         order,
+         fourier,
+         idx,
+         id,
+         #train_validation = train_validation,
+         enhance = FALSE),
+    possibly(fit_dhr,
+             otherwise = NULL),
+    .progress = TRUE
+  ))
+
+tscv_time <- Sys.time() - start
+
