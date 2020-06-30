@@ -1,18 +1,15 @@
 # Pkgs --------------------------------------------------------------------
 
-#suppressPackageStartupMessages({
 library(tidyverse)
 library(lubridate)
 library(doMC)
 library(rsample)
 library(Metrics)
 library(forecast)
-library(tsutils)
-#})
 
 # Paths -------------------------------------------------------------------
 
-main_path <- "/home/bastian/Desktop/adm_pm_temp"
+main_path <- getwd()
 
 # Create folders for fitted models
 fit_folder <- "fitted"
